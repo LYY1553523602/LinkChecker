@@ -20,23 +20,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         
-    - name: Setup Gradle
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+      
+    - name: Build with Gradle
       uses: gradle/gradle-build-action@v2
       with:
-        gradle-version: 8.2
+        arguments: assembleDebug
         
-    - name: Build with Gradle
-      run: gradle assembleDebug
-      
-    - name: Find APK
-      run: |
-        find . -name "*.apk" -type f
-        mkdir -p app/build/outputs/apk/debug/
-        cp app/build/outputs/apk/debug/*.apk . 2>/dev/null || true
-
     - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: warn
