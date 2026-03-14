@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">链接点赞检测器</string>
+    <string name="accessibility_service_description">用于自动读取抖音、小红书等App的点赞数量。请在下方开启后返回本应用使用。</string>
+    <string name="paste_hint">在这里粘贴微信聊天记录...</string>
+    <string name="extract_links">提取链接</string>
+    <string name="start_check">开始检测</string>
+    <string name="enable_accessibility">开启无障碍服务</string>
+    <string name="no_links_found">未找到链接</string>
+    <string name="found_links">找到 %d 个链接</string>
+    <string name="checking">正在检测: %s</string>
+    <string name="check_complete">检测完成</string>
+    <string name="likes_count">点赞: %s</string>
+    <string name="likes_above_50">✓ 达标 (≥50)</string>
+    <string name="likes_below_50">✗ 未达标 (&lt;50)</string>
+    <string name="platform_douyin">抖音</string>
+    <string name="platform_xiaohongshu">小红书</string>
+    <string name="platform_toutiao">今日头条</string>
+    <string name="platform_wechat">微信</string>
+    <string name="platform_unknown">未知</string>
+</resources>
