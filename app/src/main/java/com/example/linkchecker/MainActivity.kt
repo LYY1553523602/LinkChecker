@@ -31,23 +31,32 @@ class MainActivity : AppCompatActivity() {
     private var isChecking = false
     private val handler = Handler(Looper.getMainLooper())
     
-    private val checkTimeout = 15000L // 15秒超时
+    private val checkTimeout = 20000L // 20秒超时，给自动点击留时间
     private var checkRunnable: Runnable? = null
 
     private val resultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "com.example.linkchecker.LIKE_RESULT") {
                 val found = intent.getBooleanExtra("found", false)
-                val likes = intent.getStringExtra("likes") ?: ""
-                val likesNumber = intent.getIntExtra("likesNumber", -1)
-                val isAboveThreshold = intent.getBooleanExtra("isAboveThreshold", false)
-
-                if (found && currentCheckIndex < linkList.size) {
-                    updateCurrentLinkResult(likes, likesNumber, isAboveThreshold)
+                val isInvalid = intent.getBooleanExtra("isInvalid", false)
+                
+                if (isInvalid) {
+                    updateCurrentLinkInvalid()
+                } else if (found && currentCheckIndex < linkList.size) {
+                    val title = intent.getStringExtra("title")
+                    val author = intent.getStringExtra("author")
+                    val fans = intent.getStringExtra("fans")
+                    val likes = intent.getStringExtra("likes")
+                    val likesNumber = intent.getIntExtra("likesNumber", -1)
+                    val comments = intent.getStringExtra("comments")
+                    val shares = intent.getStringExtra("shares")
+                    val isAboveThreshold = intent.getBooleanExtra("isAboveThreshold", false)
+                    
+                    updateCurrentLinkResult(title, author, fans, likes, likesNumber, comments, shares, isAboveThreshold)
                 }
 
-                // 延迟后检查下一个
-                handler.postDelayed({ checkNextLink() }, 2000)
+                // 自动检查下一个
+                handler.postDelayed({ checkNextLink() }, 1500)
             }
         }
     }
@@ -116,33 +125,23 @@ class MainActivity : AppCompatActivity() {
         currentCheckIndex = 0
 
         if (linkList.isEmpty()) {
-            binding.textViewStatus.text = getString(R.string.no_links_found)
+            binding.textViewStatus.text = "未找到链接"
             binding.buttonCheck.isEnabled = false
-            Toast.makeText(this, "未找到链接", Toast.LENGTH_SHORT).show()
         } else {
-            binding.textViewStatus.text = getString(R.string.found_links, linkList.size)
+            binding.textViewStatus.text = "找到 ${linkList.size} 个链接"
             binding.buttonCheck.isEnabled = true
-            Toast.makeText(this, "找到 ${linkList.size} 个链接", Toast.LENGTH_SHORT).show()
         }
 
         linkAdapter.notifyDataSetChanged()
     }
 
     private fun startChecking() {
-        if (linkList.isEmpty()) {
-            Toast.makeText(this, "没有链接可检测", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (isChecking) {
-            Toast.makeText(this, "检测进行中...", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (linkList.isEmpty()) return
+        if (isChecking) return
 
         isChecking = true
         currentCheckIndex = 0
         
-        // 重置所有状态
         linkList = linkList.map { it.copy(status = CheckStatus.PENDING) }.toMutableList()
         linkAdapter.notifyDataSetChanged()
 
@@ -150,7 +149,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkNextLink() {
-        // 取消之前的超时检测
         checkRunnable?.let { handler.removeCallbacks(it) }
 
         if (currentCheckIndex >= linkList.size) {
@@ -159,18 +157,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val linkItem = linkList[currentCheckIndex]
-        
-        // 更新为检测中状态
         linkList[currentCheckIndex] = linkItem.copy(status = CheckStatus.CHECKING)
         linkAdapter.notifyItemChanged(currentCheckIndex)
-        binding.textViewStatus.text = getString(R.string.checking, 
-            "${LinkExtractor.getPlatformName(linkItem.platform)} ${currentCheckIndex + 1}/${linkList.size}")
+        binding.textViewStatus.text = "正在检测: ${LinkExtractor.getPlatformName(linkItem.platform)} ${currentCheckIndex + 1}/${linkList.size}"
 
-        // 通知 AccessibilityService 开始等待
         LinkCheckAccessibilityService.reset()
         LinkCheckAccessibilityService.instance?.startWaiting(linkItem.platform)
 
-        // 打开链接
         val success = PlatformHandler.openLink(this, linkItem)
         if (!success) {
             updateCurrentLinkFailed()
@@ -178,10 +171,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 设置超时
         checkRunnable = Runnable {
             if (currentCheckIndex < linkList.size && linkList[currentCheckIndex].status == CheckStatus.CHECKING) {
-                // 超时，标记为失败
                 updateCurrentLinkTimeout()
                 checkNextLink()
             }
@@ -189,23 +180,35 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(checkRunnable!!, checkTimeout)
     }
 
-    private fun updateCurrentLinkResult(likes: String, likesNumber: Int, isAboveThreshold: Boolean) {
+    private fun updateCurrentLinkResult(title: String?, author: String?, fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?, isAboveThreshold: Boolean) {
         if (currentCheckIndex >= linkList.size) return
         
         val linkItem = linkList[currentCheckIndex]
         linkList[currentCheckIndex] = linkItem.copy(
             status = CheckStatus.SUCCESS,
+            title = title,
+            author = author,
+            fans = fans,
             likes = likes,
             likesNumber = likesNumber,
+            comments = comments,
+            shares = shares,
             isAboveThreshold = isAboveThreshold
         )
         linkAdapter.notifyItemChanged(currentCheckIndex)
         currentCheckIndex++
     }
 
+    private fun updateCurrentLinkInvalid() {
+        if (currentCheckIndex >= linkList.size) return
+        val linkItem = linkList[currentCheckIndex]
+        linkList[currentCheckIndex] = linkItem.copy(status = CheckStatus.INVALID, isInvalid = true)
+        linkAdapter.notifyItemChanged(currentCheckIndex)
+        currentCheckIndex++
+    }
+
     private fun updateCurrentLinkFailed() {
         if (currentCheckIndex >= linkList.size) return
-        
         val linkItem = linkList[currentCheckIndex]
         linkList[currentCheckIndex] = linkItem.copy(status = CheckStatus.FAILED)
         linkAdapter.notifyItemChanged(currentCheckIndex)
@@ -214,7 +217,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateCurrentLinkTimeout() {
         if (currentCheckIndex >= linkList.size) return
-        
         val linkItem = linkList[currentCheckIndex]
         linkList[currentCheckIndex] = linkItem.copy(status = CheckStatus.TIMEOUT)
         linkAdapter.notifyItemChanged(currentCheckIndex)
@@ -223,15 +225,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun finishChecking() {
         isChecking = false
-        binding.textViewStatus.text = getString(R.string.check_complete)
+        binding.textViewStatus.text = "检测完成"
         
-        // 显示结果
         val aboveThresholdCount = linkList.count { it.isAboveThreshold }
-        Toast.makeText(this, 
-            "检测完成! 共有 ${aboveThresholdCount} 个链接点赞≥50", 
-            Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "检测完成! 共有 ${aboveThresholdCount} 个链接点赞≥50", Toast.LENGTH_LONG).show()
 
-        // 打开结果页面
         val intent = Intent(this, ResultActivity::class.java).apply {
             putParcelableArrayListExtra("links", ArrayList(linkList))
         }
@@ -241,11 +239,8 @@ class MainActivity : AppCompatActivity() {
     private fun isAccessibilityServiceEnabled(): Boolean {
         val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        
         for (service in enabledServices) {
-            if (service.resolveInfo.serviceInfo.packageName == packageName) {
-                return true
-            }
+            if (service.resolveInfo.serviceInfo.packageName == packageName) return true
         }
         return false
     }
@@ -263,10 +258,8 @@ class MainActivity : AppCompatActivity() {
     private fun showAccessibilityDialog() {
         AlertDialog.Builder(this)
             .setTitle("需要无障碍权限")
-            .setMessage("本应用需要无障碍服务权限才能自动读取点赞数。请在设置中找到\"链接点赞检测服务\"并开启。")
-            .setPositiveButton("去开启") { _, _ ->
-                openAccessibilitySettings()
-            }
+            .setMessage("本应用需要无障碍服务权限才能实现全自动检测。请在设置中开启。")
+            .setPositiveButton("去开启") { _, _ -> openAccessibilitySettings() }
             .setNegativeButton("取消", null)
             .show()
     }
@@ -274,6 +267,5 @@ class MainActivity : AppCompatActivity() {
     private fun openAccessibilitySettings() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         startActivity(intent)
-        Toast.makeText(this, "请找到\"链接点赞检测服务\"并开启", Toast.LENGTH_LONG).show()
     }
 }

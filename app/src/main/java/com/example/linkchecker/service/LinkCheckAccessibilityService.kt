@@ -20,7 +20,7 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         var currentPlatform: Platform? = null
         
         @Volatile
-        var lastResult: LikeResult? = null
+        var lastResult: FullResult? = null
         
         fun reset() {
             isWaitingForResult = false
@@ -29,10 +29,16 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         }
     }
 
-    data class LikeResult(
-        val likes: String,
-        val likesNumber: Int,
-        val isAboveThreshold: Boolean
+    data class FullResult(
+        val title: String? = null,
+        val author: String? = null,
+        val fans: String? = null,
+        val likes: String? = null,
+        val likesNumber: Int = -1,
+        val comments: String? = null,
+        val shares: String? = null,
+        val isAboveThreshold: Boolean = false,
+        val isInvalid: Boolean = false
     )
 
     override fun onServiceConnected() {
@@ -41,192 +47,157 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        // 1. 自动点击“同意/打开”弹窗
+        handleAutoClickDialogs(rootInActiveWindow)
+
         if (!isWaitingForResult || currentPlatform == null) return
 
         val rootNode = rootInActiveWindow ?: return
         
         try {
+            // 2. 检查链接是否失效
+            if (checkIsInvalid(rootNode)) {
+                handleInvalid()
+                return
+            }
+
+            // 3. 根据平台抓取数据
             when (currentPlatform) {
-                Platform.DOUYIN -> parseDouyinLikes(rootNode)
-                Platform.XIAOHONGSHU -> parseXiaohongshuLikes(rootNode)
-                Platform.TOUTIAO -> parseToutiaoLikes(rootNode)
-                Platform.WECHAT -> parseWechatLikes(rootNode)
-                Platform.WEIBO -> parseWeiboLikes(rootNode)
-                Platform.KUAISHOU -> parseKuaishouLikes(rootNode)
+                Platform.DOUYIN -> parseDouyin(rootNode)
+                Platform.XIAOHONGSHU -> parseXiaohongshu(rootNode)
+                Platform.TOUTIAO -> parseToutiao(rootNode)
+                Platform.WECHAT -> parseWechat(rootNode)
+                Platform.WEIBO -> parseWeibo(rootNode)
+                Platform.KUAISHOU -> parseKuaishou(rootNode)
                 else -> {}
             }
         } finally {
-            // 注意：在某些 Android 版本上，rootNode 不需要手动 recycle，或者 recycle 后会导致后续访问出错
-            // 但为了防止内存泄漏，通常建议 recycle。这里我们根据实际情况处理。
+            // rootNode.recycle()
         }
     }
 
-    override fun onInterrupt() {
-        // 服务中断
-    }
-
-    // 解析抖音点赞数
-    private fun parseDouyinLikes(rootNode: AccessibilityNodeInfo) {
-        val idPatterns = listOf(
-            "com.ss.android.ugc.aweme:id/like_count",
-            "com.ss.android.ugc.aweme:id/count",
-            "com.ss.android.ugc.aweme:id/title"
-        )
-        if (tryParseByIds(rootNode, idPatterns)) return
-        
-        tryParseByText(rootNode, listOf("赞", "点赞", "喜欢", "likes"))
-    }
-
-    // 解析小红书点赞数
-    private fun parseXiaohongshuLikes(rootNode: AccessibilityNodeInfo) {
-        val idPatterns = listOf(
-            "com.xingin.xhs:id/like_count",
-            "com.xingin.xhs:id/count",
-            "com.xingin.xhs:id/tv_like"
-        )
-        if (tryParseByIds(rootNode, idPatterns)) return
-        
-        tryParseByText(rootNode, listOf("赞", "likes", "喜欢"))
-    }
-
-    // 解析今日头条点赞数
-    private fun parseToutiaoLikes(rootNode: AccessibilityNodeInfo) {
-        tryParseByText(rootNode, listOf("赞", "点赞", "likes"))
-    }
-
-    // 解析微信文章点赞数
-    private fun parseWechatLikes(rootNode: AccessibilityNodeInfo) {
-        val idPatterns = listOf("com.tencent.mm:id/like_num")
-        if (tryParseByIds(rootNode, idPatterns)) return
-        
-        tryParseByText(rootNode, listOf("赞", "点赞", "likes", "Like"))
-    }
-
-    // 解析微博点赞数
-    private fun parseWeiboLikes(rootNode: AccessibilityNodeInfo) {
-        val idPatterns = listOf(
-            "com.sina.weibo:id/tv_like_count",
-            "com.sina.weibo:id/like_count"
-        )
-        if (tryParseByIds(rootNode, idPatterns)) return
-        
-        tryParseByText(rootNode, listOf("赞", "点赞", "likes"))
-    }
-
-    // 解析快手点赞数
-    private fun parseKuaishouLikes(rootNode: AccessibilityNodeInfo) {
-        val idPatterns = listOf(
-            "com.smile.gifmaker:id/like_count",
-            "com.smile.gifmaker:id/count"
-        )
-        if (tryParseByIds(rootNode, idPatterns)) return
-        
-        tryParseByText(rootNode, listOf("赞", "点赞", "likes"))
-    }
-
-    private fun tryParseByIds(rootNode: AccessibilityNodeInfo, ids: List<String>): Boolean {
-        for (id in ids) {
-            val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+    private fun handleAutoClickDialogs(rootNode: AccessibilityNodeInfo?) {
+        if (rootNode == null) return
+        val keywords = listOf("允许", "同意", "打开", "继续", "确认", "Open", "Allow", "Accept")
+        for (keyword in keywords) {
+            val nodes = rootNode.findAccessibilityNodeInfosByText(keyword)
             for (node in nodes) {
-                val text = node.text?.toString()
-                if (!text.isNullOrEmpty()) {
-                    val number = parseLikeNumber(text)
-                    if (number >= 0) {
-                        handleSuccess(text, number)
-                        return true
-                    }
+                if (node.isClickable && node.isEnabled) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 }
+            }
+        }
+    }
+
+    private fun checkIsInvalid(rootNode: AccessibilityNodeInfo): Boolean {
+        val invalidKeywords = listOf("链接已失效", "内容已被删除", "页面不存在", "404", "Invalid Link", "Deleted")
+        for (keyword in invalidKeywords) {
+            if (rootNode.findAccessibilityNodeInfosByText(keyword).isNotEmpty()) {
+                return true
             }
         }
         return false
     }
 
-    private fun tryParseByText(rootNode: AccessibilityNodeInfo, keywords: List<String>): Boolean {
-        val likeNodes = findNodesByTexts(rootNode, keywords)
-        for (node in likeNodes) {
-            val likeText = getLikeCountFromNode(node)
-            if (likeText != null) {
-                val number = parseLikeNumber(likeText)
-                if (number >= 0) {
-                    handleSuccess(likeText, number)
-                    return true
-                }
-            }
-        }
-        return false
+    private fun handleInvalid() {
+        lastResult = FullResult(isInvalid = true)
+        isWaitingForResult = false
+        sendResultBroadcast()
     }
 
-    private fun handleSuccess(text: String, number: Int) {
-        lastResult = LikeResult(
-            likes = text,
-            likesNumber = number,
-            isAboveThreshold = number >= 50
+    // --- 平台抓取逻辑 ---
+
+    private fun parseDouyin(rootNode: AccessibilityNodeInfo) {
+        val title = findTextById(rootNode, "com.ss.android.ugc.aweme:id/desc")
+        val author = findTextById(rootNode, "com.ss.android.ugc.aweme:id/title")
+        val likes = findTextById(rootNode, "com.ss.android.ugc.aweme:id/like_count")
+        val comments = findTextById(rootNode, "com.ss.android.ugc.aweme:id/comment_count")
+        val shares = findTextById(rootNode, "com.ss.android.ugc.aweme:id/share_count")
+        
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(title, author, null, likes, num, comments, shares)
+        }
+    }
+
+    private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo) {
+        val title = findTextById(rootNode, "com.xingin.xhs:id/note_title")
+        val author = findTextById(rootNode, "com.xingin.xhs:id/nick_name_tv")
+        val likes = findTextById(rootNode, "com.xingin.xhs:id/like_count")
+        val comments = findTextById(rootNode, "com.xingin.xhs:id/comment_count")
+        val shares = findTextById(rootNode, "com.xingin.xhs:id/share_count")
+        
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(title, author, null, likes, num, comments, shares)
+        }
+    }
+
+    private fun parseToutiao(rootNode: AccessibilityNodeInfo) {
+        val title = findTextById(rootNode, "com.ss.android.article.news:id/title")
+        val author = findTextById(rootNode, "com.ss.android.article.news:id/user_name")
+        val fans = findTextById(rootNode, "com.ss.android.article.news:id/fans_count")
+        val likes = findTextById(rootNode, "com.ss.android.article.news:id/like_count")
+        
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(title, author, fans, likes, num, null, null)
+        }
+    }
+
+    private fun parseWechat(rootNode: AccessibilityNodeInfo) {
+        val title = findTextById(rootNode, "com.tencent.mm:id/title")
+        val author = findTextById(rootNode, "com.tencent.mm:id/nick_name")
+        val likes = findTextById(rootNode, "com.tencent.mm:id/like_num")
+        
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(title, author, null, likes, num, null, null)
+        }
+    }
+
+    private fun parseWeibo(rootNode: AccessibilityNodeInfo) {
+        val author = findTextById(rootNode, "com.sina.weibo:id/title_text")
+        val likes = findTextById(rootNode, "com.sina.weibo:id/tv_like_count")
+        
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(null, author, null, likes, num, null, null)
+        }
+    }
+
+    private fun parseKuaishou(rootNode: AccessibilityNodeInfo) {
+        val likes = findTextById(rootNode, "com.smile.gifmaker:id/like_count")
+        if (likes != null) {
+            val num = parseLikeNumber(likes)
+            handleSuccess(null, null, null, likes, num, null, null)
+        }
+    }
+
+    // --- 辅助方法 ---
+
+    private fun findTextById(rootNode: AccessibilityNodeInfo, id: String): String? {
+        val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+        return if (nodes.isNotEmpty()) nodes[0].text?.toString() else null
+    }
+
+    private fun handleSuccess(title: String?, author: String?, fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?) {
+        lastResult = FullResult(
+            title = title,
+            author = author,
+            fans = fans,
+            likes = likes,
+            likesNumber = likesNumber,
+            comments = comments,
+            shares = shares,
+            isAboveThreshold = likesNumber >= 50
         )
         isWaitingForResult = false
         sendResultBroadcast()
     }
 
-    // 根据文本查找节点
-    private fun findNodesByTexts(rootNode: AccessibilityNodeInfo, texts: List<String>): List<AccessibilityNodeInfo> {
-        val results = mutableListOf<AccessibilityNodeInfo>()
-        
-        fun traverse(node: AccessibilityNodeInfo) {
-            val nodeText = node.text?.toString()
-            if (nodeText != null) {
-                for (text in texts) {
-                    if (nodeText.contains(text, ignoreCase = true)) {
-                        results.add(node)
-                        break
-                    }
-                }
-            }
-            
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i)
-                if (child != null) {
-                    traverse(child)
-                }
-            }
-        }
-        
-        traverse(rootNode)
-        return results
-    }
-
-    // 从节点获取点赞数
-    private fun getLikeCountFromNode(node: AccessibilityNodeInfo): String? {
-        // 获取节点自身的文本
-        val text = node.text?.toString()
-        if (!text.isNullOrEmpty() && containsNumber(text)) {
-            return text
-        }
-        
-        // 检查兄弟节点
-        val parent = node.parent
-        if (parent != null) {
-            for (i in 0 until parent.childCount) {
-                val sibling = parent.getChild(i)
-                if (sibling != null && sibling != node) {
-                    val siblingText = sibling.text?.toString()
-                    if (!siblingText.isNullOrEmpty() && containsNumber(siblingText)) {
-                        return siblingText
-                    }
-                }
-            }
-        }
-        
-        return null
-    }
-
-    // 检查文本是否包含数字
-    private fun containsNumber(text: String): Boolean {
-        return Pattern.compile("[0-9]").matcher(text).find()
-    }
-
-    // 解析点赞数为数字
     private fun parseLikeNumber(text: String): Int {
         return try {
-            // 移除所有非数字和非小数点的字符，但保留单位标识
             val cleanText = text.lowercase()
             when {
                 cleanText.contains("w") || cleanText.contains("万") -> {
@@ -249,28 +220,27 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         }
     }
 
-    // 发送结果广播
     private fun sendResultBroadcast() {
         val intent = Intent("com.example.linkchecker.LIKE_RESULT")
         intent.putExtra("found", lastResult != null)
-        intent.putExtra("likes", lastResult?.likes ?: "")
+        intent.putExtra("title", lastResult?.title)
+        intent.putExtra("author", lastResult?.author)
+        intent.putExtra("fans", lastResult?.fans)
+        intent.putExtra("likes", lastResult?.likes)
         intent.putExtra("likesNumber", lastResult?.likesNumber ?: -1)
+        intent.putExtra("comments", lastResult?.comments)
+        intent.putExtra("shares", lastResult?.shares)
         intent.putExtra("isAboveThreshold", lastResult?.isAboveThreshold ?: false)
+        intent.putExtra("isInvalid", lastResult?.isInvalid ?: false)
         sendBroadcast(intent)
         
-        // 返回到本应用
+        // 自动返回本应用
         performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
-    // 公共方法：开始等待结果
     fun startWaiting(platform: Platform) {
         currentPlatform = platform
         isWaitingForResult = true
         lastResult = null
-    }
-
-    // 公共方法：停止等待
-    fun stopWaiting() {
-        isWaitingForResult = false
     }
 }

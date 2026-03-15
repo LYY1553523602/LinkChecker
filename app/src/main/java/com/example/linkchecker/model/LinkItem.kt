@@ -8,9 +8,15 @@ data class LinkItem(
     val url: String,
     val platform: Platform,
     val status: CheckStatus = CheckStatus.PENDING,
+    val title: String? = null,
+    val author: String? = null,
+    val fans: String? = null,
     val likes: String? = null,
     val likesNumber: Int = -1,
-    val isAboveThreshold: Boolean = false
+    val comments: String? = null,
+    val shares: String? = null,
+    val isAboveThreshold: Boolean = false,
+    val isInvalid: Boolean = false
 ) : Parcelable
 
 enum class Platform {
@@ -28,5 +34,6 @@ enum class CheckStatus {
     CHECKING,      // 检测中
     SUCCESS,       // 检测成功
     FAILED,        // 检测失败
-    TIMEOUT        // 超时
+    TIMEOUT,       // 超时
+    INVALID        // 链接失效
 }
