@@ -1,0 +1,15 @@
+﻿2026-03-15T01:31:51.7691367Z ##[group]Run actions/upload-artifact@v4
+2026-03-15T01:31:51.7691645Z with:
+2026-03-15T01:31:51.7691977Z   name: app-debug
+2026-03-15T01:31:51.7692179Z   path: app/build/outputs/apk/debug/*.apk
+2026-03-15T01:31:51.7692434Z   if-no-files-found: warn
+2026-03-15T01:31:51.7692635Z   compression-level: 6
+2026-03-15T01:31:51.7692827Z   overwrite: false
+2026-03-15T01:31:51.7693018Z   include-hidden-files: false
+2026-03-15T01:31:51.7693222Z env:
+2026-03-15T01:31:51.7693480Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7693931Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7694302Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7694565Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7694815Z ##[endgroup]
+2026-03-15T01:31:51.9880530Z ##[warning]No files were found with the provided path: app/build/outputs/apk/debug/*.apk. No artifacts will be uploaded.

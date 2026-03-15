@@ -20,26 +20,29 @@ jobs:
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
-      
-    - name: Make gradlew executable
-      run: chmod +x gradlew
-      
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
-      
-    - name: Debug - List all files
+        
+    - name: Check gradle wrapper
       run: |
-        echo "Looking for APK files..."
-        find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
-        echo "Checking build directory..."
-        ls -la app/build/outputs/apk/ 2>/dev/null || echo "Directory not found"
-        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug directory not found"
-      
+        ls -la gradlew
+        ls -la gradle/wrapper/
+        cat gradle/wrapper/gradle-wrapper.properties
+        
+    - name: Build with Gradle
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug --info --stacktrace 2>&1 | head -200
+      continue-on-error: true
+        
+    - name: Check build result
+      run: |
+        echo "Checking for APK..."
+        find . -name "*.apk" -type f 2>/dev/null
+        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug APK found"
+        
     - name: Upload APK
       uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: app-debug
-        path: app/build/outputs/apk/debug/*.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
         if-no-files-found: warn

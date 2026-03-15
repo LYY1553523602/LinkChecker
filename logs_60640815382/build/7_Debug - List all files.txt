@@ -1,0 +1,17 @@
+﻿2026-03-15T01:31:51.7451709Z ##[group]Run echo "Looking for APK files..."
+2026-03-15T01:31:51.7452044Z [36;1mecho "Looking for APK files..."[0m
+2026-03-15T01:31:51.7452413Z [36;1mfind . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"[0m
+2026-03-15T01:31:51.7452815Z [36;1mecho "Checking build directory..."[0m
+2026-03-15T01:31:51.7453203Z [36;1mls -la app/build/outputs/apk/ 2>/dev/null || echo "Directory not found"[0m
+2026-03-15T01:31:51.7453755Z [36;1mls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug directory not found"[0m
+2026-03-15T01:31:51.7503168Z shell: /usr/bin/bash -e {0}
+2026-03-15T01:31:51.7503395Z env:
+2026-03-15T01:31:51.7503675Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7504139Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7504513Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7504795Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7505044Z ##[endgroup]
+2026-03-15T01:31:51.7575891Z Looking for APK files...
+2026-03-15T01:31:51.7607956Z Checking build directory...
+2026-03-15T01:31:51.7622146Z Directory not found
+2026-03-15T01:31:51.7635253Z Debug directory not found

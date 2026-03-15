@@ -1,0 +1,9 @@
+﻿2026-03-15T01:31:51.7275904Z ##[group]Run ./gradlew assembleDebug --stacktrace
+2026-03-15T01:31:51.7276286Z [36;1m./gradlew assembleDebug --stacktrace[0m
+2026-03-15T01:31:51.7326564Z shell: /usr/bin/bash -e {0}
+2026-03-15T01:31:51.7326788Z env:
+2026-03-15T01:31:51.7327073Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7327548Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-03-15T01:31:51.7327934Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7328206Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-03-15T01:31:51.7328454Z ##[endgroup]
