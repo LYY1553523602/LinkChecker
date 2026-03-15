@@ -20,24 +20,27 @@ jobs:
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      
-    - name: Cache Gradle
-      uses: actions/cache@v4
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-        
-    - name: Grant execute permission for gradlew
+        packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+      
+    - name: Make gradlew executable
       run: chmod +x gradlew
       
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug --stacktrace
+    - name: Build Debug APK
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+        echo "Build exit code: ${PIPESTATUS[0]}"
+      
+    - name: Check build output
+      if: always()
+      run: |
+        cat build.log || true
+        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "APK directory not found"
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
       
     - name: Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
