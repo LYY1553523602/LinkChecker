@@ -6,12 +6,6 @@ import java.util.regex.Pattern
 
 object LinkExtractor {
 
-    /**
-     * 改进后的通用 URL 正则表达式
-     * 1. 匹配 http/https 协议
-     * 2. 匹配域名部分
-     * 3. 匹配路径、查询参数等，直到遇到空白字符、中文或特定标点符号
-     */
     private val URL_PATTERN = Pattern.compile(
         "(https?://[a-zA-Z0-9][-a-zA-Z0-9]*(\\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(:[0-9]+)?(/[^\\s\\u4e00-\\u9fa5\\u3000-\\u303f\\uff00-\\uffef]*)?)",
         Pattern.CASE_INSENSITIVE
@@ -19,27 +13,50 @@ object LinkExtractor {
 
     fun extractLinks(text: String): List<LinkItem> {
         val links = mutableListOf<LinkItem>()
-        val foundUrls = mutableSetOf<String>()
+        val lines = text.split("\n")
+        
+        var currentTitle: String? = null
+        var currentAuthor: String? = null
+        var currentPlatform: Platform = Platform.UNKNOWN
 
-        val matcher = URL_PATTERN.matcher(text)
-        while (matcher.find()) {
-            var url = matcher.group(1) ?: ""
-            
-            // 进一步清理 URL 末尾可能误匹配的标点符号（如句号、逗号、括号等）
-            url = cleanUrl(url)
-            
-            if (url.isNotEmpty() && foundUrls.add(url)) {
-                val platform = detectPlatform(url)
-                links.add(LinkItem(url = url, platform = platform))
+        for (line in lines) {
+            val trimmedLine = line.trim()
+            if (trimmedLine.isEmpty()) continue
+
+            // 1. 尝试从行中提取元数据（如：微信“界面新闻”：标题内容）
+            val metaMatcher = Pattern.compile("(微信|抖音|小红书|今日头条|微博|快手|西瓜视频)“([^”]+)”：(.+)").matcher(trimmedLine)
+            if (metaMatcher.find()) {
+                currentPlatform = parsePlatformName(metaMatcher.group(1))
+                currentAuthor = metaMatcher.group(2)
+                currentTitle = metaMatcher.group(3)
+                continue
+            }
+
+            // 2. 尝试提取 URL
+            val urlMatcher = URL_PATTERN.matcher(trimmedLine)
+            if (urlMatcher.find()) {
+                var url = urlMatcher.group(1) ?: ""
+                url = cleanUrl(url)
+                
+                if (url.isNotEmpty()) {
+                    val detectedPlatform = detectPlatform(url)
+                    links.add(LinkItem(
+                        url = url,
+                        platform = if (detectedPlatform != Platform.UNKNOWN) detectedPlatform else currentPlatform,
+                        title = currentTitle,
+                        author = currentAuthor
+                    ))
+                    // 提取完一个链接后重置元数据，防止误用
+                    currentTitle = null
+                    currentAuthor = null
+                    currentPlatform = Platform.UNKNOWN
+                }
             }
         }
 
         return links
     }
 
-    /**
-     * 清理 URL 末尾的非字符标点，防止误匹配
-     */
     private fun cleanUrl(url: String): String {
         var result = url
         val trailingChars = charArrayOf('.', ',', '!', '?', ';', ':', ')', ']', '}', '>', '\"', '\'')
@@ -47,6 +64,19 @@ object LinkExtractor {
             result = result.substring(0, result.length - 1)
         }
         return result
+    }
+
+    private fun parsePlatformName(name: String): Platform {
+        return when (name) {
+            "抖音" -> Platform.DOUYIN
+            "小红书" -> Platform.XIAOHONGSHU
+            "今日头条" -> Platform.TOUTIAO
+            "微信" -> Platform.WECHAT
+            "微博" -> Platform.WEIBO
+            "快手" -> Platform.KUAISHOU
+            "西瓜视频" -> Platform.TOUTIAO // 西瓜视频通常归类为今日头条系
+            else -> Platform.UNKNOWN
+        }
     }
 
     private fun detectPlatform(url: String): Platform {
@@ -58,6 +88,7 @@ object LinkExtractor {
             lowerUrl.contains("mp.weixin.qq.com") || lowerUrl.contains("weixin.qq.com") -> Platform.WECHAT
             lowerUrl.contains("weibo.com") || lowerUrl.contains("weibo.cn") -> Platform.WEIBO
             lowerUrl.contains("kuaishou.com") || lowerUrl.contains("chenzhongtech.com") -> Platform.KUAISHOU
+            lowerUrl.contains("ixigua.com") -> Platform.TOUTIAO
             else -> Platform.UNKNOWN
         }
     }

@@ -47,13 +47,13 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val rootNode = rootInActiveWindow ?: return
+        
         // 1. 自动点击“同意/打开”弹窗
-        handleAutoClickDialogs(rootInActiveWindow)
+        handleAutoClickDialogs(rootNode)
 
         if (!isWaitingForResult || currentPlatform == null) return
 
-        val rootNode = rootInActiveWindow ?: return
-        
         try {
             // 2. 检查链接是否失效
             if (checkIsInvalid(rootNode)) {
@@ -71,13 +71,12 @@ class LinkCheckAccessibilityService : AccessibilityService() {
                 Platform.KUAISHOU -> parseKuaishou(rootNode)
                 else -> {}
             }
-        } finally {
-            // rootNode.recycle()
+        } catch (e: Exception) {
+            // 忽略异常
         }
     }
 
-    private fun handleAutoClickDialogs(rootNode: AccessibilityNodeInfo?) {
-        if (rootNode == null) return
+    private fun handleAutoClickDialogs(rootNode: AccessibilityNodeInfo) {
         val keywords = listOf("允许", "同意", "打开", "继续", "确认", "Open", "Allow", "Accept")
         for (keyword in keywords) {
             val nodes = rootNode.findAccessibilityNodeInfosByText(keyword)
@@ -108,61 +107,50 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     // --- 平台抓取逻辑 ---
 
     private fun parseDouyin(rootNode: AccessibilityNodeInfo) {
-        val title = findTextById(rootNode, "com.ss.android.ugc.aweme:id/desc")
-        val author = findTextById(rootNode, "com.ss.android.ugc.aweme:id/title")
         val likes = findTextById(rootNode, "com.ss.android.ugc.aweme:id/like_count")
         val comments = findTextById(rootNode, "com.ss.android.ugc.aweme:id/comment_count")
         val shares = findTextById(rootNode, "com.ss.android.ugc.aweme:id/share_count")
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(title, author, null, likes, num, comments, shares)
+            handleSuccess(null, null, null, likes, num, comments, shares)
         }
     }
 
     private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo) {
-        val title = findTextById(rootNode, "com.xingin.xhs:id/note_title")
-        val author = findTextById(rootNode, "com.xingin.xhs:id/nick_name_tv")
         val likes = findTextById(rootNode, "com.xingin.xhs:id/like_count")
         val comments = findTextById(rootNode, "com.xingin.xhs:id/comment_count")
         val shares = findTextById(rootNode, "com.xingin.xhs:id/share_count")
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(title, author, null, likes, num, comments, shares)
+            handleSuccess(null, null, null, likes, num, comments, shares)
         }
     }
 
     private fun parseToutiao(rootNode: AccessibilityNodeInfo) {
-        val title = findTextById(rootNode, "com.ss.android.article.news:id/title")
-        val author = findTextById(rootNode, "com.ss.android.article.news:id/user_name")
-        val fans = findTextById(rootNode, "com.ss.android.article.news:id/fans_count")
         val likes = findTextById(rootNode, "com.ss.android.article.news:id/like_count")
+        val fans = findTextById(rootNode, "com.ss.android.article.news:id/fans_count")
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(title, author, fans, likes, num, null, null)
+            handleSuccess(null, null, fans, likes, num, null, null)
         }
     }
 
     private fun parseWechat(rootNode: AccessibilityNodeInfo) {
-        val title = findTextById(rootNode, "com.tencent.mm:id/title")
-        val author = findTextById(rootNode, "com.tencent.mm:id/nick_name")
         val likes = findTextById(rootNode, "com.tencent.mm:id/like_num")
-        
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(title, author, null, likes, num, null, null)
+            handleSuccess(null, null, null, likes, num, null, null)
         }
     }
 
     private fun parseWeibo(rootNode: AccessibilityNodeInfo) {
-        val author = findTextById(rootNode, "com.sina.weibo:id/title_text")
         val likes = findTextById(rootNode, "com.sina.weibo:id/tv_like_count")
-        
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, author, null, likes, num, null, null)
+            handleSuccess(null, null, null, likes, num, null, null)
         }
     }
 
@@ -223,8 +211,6 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     private fun sendResultBroadcast() {
         val intent = Intent("com.example.linkchecker.LIKE_RESULT")
         intent.putExtra("found", lastResult != null)
-        intent.putExtra("title", lastResult?.title)
-        intent.putExtra("author", lastResult?.author)
         intent.putExtra("fans", lastResult?.fans)
         intent.putExtra("likes", lastResult?.likes)
         intent.putExtra("likesNumber", lastResult?.likesNumber ?: -1)
@@ -234,7 +220,9 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         intent.putExtra("isInvalid", lastResult?.isInvalid ?: false)
         sendBroadcast(intent)
         
-        // 自动返回本应用
+        // 自动关闭页面：连续执行两次返回操作，通常能关闭当前页面或返回到 APP 主页
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        Thread.sleep(500)
         performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
