@@ -8,29 +8,29 @@ object LinkExtractor {
 
     // 抖音链接正则
     private val DOUYIN_PATTERNS = listOf(
-        Pattern.compile("https?://v\.douyin\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://www\.iesdouyin\.com/share/video/[0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://www\.douyin\.com/video/[0-9]+", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("https?://v\\.douyin\\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://www\\.iesdouyin\\.com/share/video/[0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://www\\.douyin\\.com/video/[0-9]+", Pattern.CASE_INSENSITIVE)
     )
 
     // 小红书链接正则
     private val XIAOHONGSHU_PATTERNS = listOf(
-        Pattern.compile("https?://www\.xiaohongshu\.com/explore/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://xhslink\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("http://xhslink\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("https?://www\\.xiaohongshu\\.com/explore/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://xhslink\\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("http://xhslink\\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE)
     )
 
     // 今日头条链接正则
     private val TOUTIAO_PATTERNS = listOf(
-        Pattern.compile("https?://www\.toutiao\.com/article/[0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://m\.toutiao\.com/is/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://toutiao\.com/group/[0-9]+", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("https?://www\\.toutiao\\.com/article/[0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://m\\.toutiao\\.com/is/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://toutiao\\.com/group/[0-9]+", Pattern.CASE_INSENSITIVE)
     )
 
     // 微信文章链接正则
     private val WECHAT_PATTERNS = listOf(
-        Pattern.compile("https?://mp\.weixin\.qq\.com/s/[a-zA-Z0-9_-]+", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("https?://mp\.weixin\.qq\.com/s\?[^\\s]+", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("https?://mp\\.weixin\\.qq\\.com/s/[a-zA-Z0-9_-]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://mp\\.weixin\\.qq\\.com/s\\?[^\\s]+", Pattern.CASE_INSENSITIVE)
     )
 
     // 通用URL正则
