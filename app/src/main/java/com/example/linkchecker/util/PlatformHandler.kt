@@ -17,15 +17,17 @@ object PlatformHandler {
     private const val PACKAGE_KUAISHOU = "com.smile.gifmaker"
 
     fun openLink(context: Context, linkItem: LinkItem): Boolean {
-        return when (linkItem.platform) {
-            Platform.DOUYIN -> openNativeApp(context, linkItem.url, PACKAGE_DOUYIN)
-            Platform.XIAOHONGSHU -> openNativeApp(context, linkItem.url, PACKAGE_XIAOHONGSHU)
-            Platform.TOUTIAO -> openNativeApp(context, linkItem.url, PACKAGE_TOUTIAO)
-            Platform.WECHAT -> openNativeApp(context, linkItem.url, PACKAGE_WECHAT)
-            Platform.WEIBO -> openNativeApp(context, linkItem.url, PACKAGE_WEIBO)
-            Platform.KUAISHOU -> openNativeApp(context, linkItem.url, PACKAGE_KUAISHOU)
-            Platform.UNKNOWN -> openWithBrowser(context, linkItem.url)
+        val packageName = getAppPackageName(linkItem.platform)
+        
+        // 1. 尝试使用指定包名打开（如果包名已知）
+        if (packageName != null) {
+            if (openNativeApp(context, linkItem.url, packageName)) {
+                return true
+            }
         }
+        
+        // 2. 尝试使用通用 Intent 打开（系统会根据 URL 方案选择合适的 APP）
+        return openWithBrowser(context, linkItem.url)
     }
 
     /**
@@ -41,11 +43,13 @@ object PlatformHandler {
             context.startActivity(intent)
             true
         } catch (e: Exception) {
-            // 如果指定包名的应用未安装，则尝试通用方式（系统会弹出选择框或用默认浏览器）
-            openWithBrowser(context, url)
+            false
         }
     }
 
+    /**
+     * 使用通用 Intent 打开，系统会弹出选择框或用默认浏览器
+     */
     private fun openWithBrowser(context: Context, url: String): Boolean {
         return try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
