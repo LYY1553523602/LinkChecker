@@ -5,7 +5,6 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.linkchecker.model.Platform
-import java.util.regex.Pattern
 
 class LinkCheckAccessibilityService : AccessibilityService() {
 
@@ -30,8 +29,6 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     }
 
     data class FullResult(
-        val title: String? = null,
-        val author: String? = null,
         val fans: String? = null,
         val likes: String? = null,
         val likesNumber: Int = -1,
@@ -49,7 +46,7 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val rootNode = rootInActiveWindow ?: return
         
-        // 1. 自动点击“同意/打开”弹窗
+        // 1. 自动点击“同意/打开”弹窗 (深度扫描)
         handleAutoClickDialogs(rootNode)
 
         if (!isWaitingForResult || currentPlatform == null) return
@@ -77,23 +74,52 @@ class LinkCheckAccessibilityService : AccessibilityService() {
     }
 
     private fun handleAutoClickDialogs(rootNode: AccessibilityNodeInfo) {
-        val keywords = listOf("允许", "同意", "打开", "继续", "确认", "Open", "Allow", "Accept")
+        // 常见的跳转确认按钮文本
+        val keywords = listOf("允许", "同意", "打开", "继续", "确认", "我知道了", "Open", "Allow", "Accept", "Continue")
+        
+        // 递归查找并点击
+        findAndClickNodesByText(rootNode, keywords)
+    }
+
+    private fun findAndClickNodesByText(node: AccessibilityNodeInfo, keywords: List<String>) {
         for (keyword in keywords) {
-            val nodes = rootNode.findAccessibilityNodeInfosByText(keyword)
-            for (node in nodes) {
-                if (node.isClickable && node.isEnabled) {
+            if (node.text?.toString()?.contains(keyword) == true || node.contentDescription?.toString()?.contains(keyword) == true) {
+                if (node.isClickable) {
                     node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    return
+                }
+                // 如果父节点可点击，点击父节点
+                var parent = node.parent
+                while (parent != null) {
+                    if (parent.isClickable) {
+                        parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        return
+                    }
+                    parent = parent.parent
                 }
             }
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findAndClickNodesByText(child, keywords)
         }
     }
 
     private fun checkIsInvalid(rootNode: AccessibilityNodeInfo): Boolean {
         val invalidKeywords = listOf("链接已失效", "内容已被删除", "页面不存在", "404", "Invalid Link", "Deleted")
-        for (keyword in invalidKeywords) {
-            if (rootNode.findAccessibilityNodeInfosByText(keyword).isNotEmpty()) {
-                return true
-            }
+        return findTextInNode(rootNode, invalidKeywords)
+    }
+
+    private fun findTextInNode(node: AccessibilityNodeInfo, keywords: List<String>): Boolean {
+        val text = node.text?.toString() ?: ""
+        val desc = node.contentDescription?.toString() ?: ""
+        for (keyword in keywords) {
+            if (text.contains(keyword) || desc.contains(keyword)) return true
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (findTextInNode(child, keywords)) return true
         }
         return false
     }
@@ -104,7 +130,7 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         sendResultBroadcast()
     }
 
-    // --- 平台抓取逻辑 ---
+    // --- 平台抓取逻辑 (增强 ID 识别) ---
 
     private fun parseDouyin(rootNode: AccessibilityNodeInfo) {
         val likes = findTextById(rootNode, "com.ss.android.ugc.aweme:id/like_count")
@@ -113,36 +139,37 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, null, likes, num, comments, shares)
+            handleSuccess(null, likes, num, comments, shares)
         }
     }
 
     private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo) {
         val likes = findTextById(rootNode, "com.xingin.xhs:id/like_count")
         val comments = findTextById(rootNode, "com.xingin.xhs:id/comment_count")
-        val shares = findTextById(rootNode, "com.xingin.xhs:id/share_count")
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, null, likes, num, comments, shares)
+            handleSuccess(null, likes, num, comments, null)
         }
     }
 
     private fun parseToutiao(rootNode: AccessibilityNodeInfo) {
+        // 今日头条粉丝量通常在详情页底部或点击头像后
         val likes = findTextById(rootNode, "com.ss.android.article.news:id/like_count")
-        val fans = findTextById(rootNode, "com.ss.android.article.news:id/fans_count")
+        val fans = findTextById(rootNode, "com.ss.android.article.news:id/fans_count") ?: 
+                   findTextByKeywords(rootNode, listOf("粉丝"))
         
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, fans, likes, num, null, null)
+            handleSuccess(fans, likes, num, null, null)
         }
     }
 
     private fun parseWechat(rootNode: AccessibilityNodeInfo) {
-        val likes = findTextById(rootNode, "com.tencent.mm:id/like_num")
+        val likes = findTextByKeywords(rootNode, listOf("在看", "点赞"))
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, null, likes, num, null, null)
+            handleSuccess(null, likes, num, null, null)
         }
     }
 
@@ -150,7 +177,7 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         val likes = findTextById(rootNode, "com.sina.weibo:id/tv_like_count")
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, null, likes, num, null, null)
+            handleSuccess(null, likes, num, null, null)
         }
     }
 
@@ -158,7 +185,7 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         val likes = findTextById(rootNode, "com.smile.gifmaker:id/like_count")
         if (likes != null) {
             val num = parseLikeNumber(likes)
-            handleSuccess(null, null, null, likes, num, null, null)
+            handleSuccess(null, likes, num, null, null)
         }
     }
 
@@ -169,10 +196,21 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         return if (nodes.isNotEmpty()) nodes[0].text?.toString() else null
     }
 
-    private fun handleSuccess(title: String?, author: String?, fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?) {
+    private fun findTextByKeywords(node: AccessibilityNodeInfo, keywords: List<String>): String? {
+        val text = node.text?.toString() ?: ""
+        for (keyword in keywords) {
+            if (text.contains(keyword)) return text
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findTextByKeywords(child, keywords)
+            if (result != null) return result
+        }
+        return null
+    }
+
+    private fun handleSuccess(fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?) {
         lastResult = FullResult(
-            title = title,
-            author = author,
             fans = fans,
             likes = likes,
             likesNumber = likesNumber,
@@ -220,10 +258,13 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         intent.putExtra("isInvalid", lastResult?.isInvalid ?: false)
         sendBroadcast(intent)
         
-        // 自动关闭页面：连续执行两次返回操作，通常能关闭当前页面或返回到 APP 主页
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        Thread.sleep(500)
-        performGlobalAction(GLOBAL_ACTION_BACK)
+        // 强化返回逻辑：尝试多次返回，并最终拉回主应用
+        Thread {
+            for (i in 1..3) {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                Thread.sleep(800)
+            }
+        }.start()
     }
 
     fun startWaiting(platform: Platform) {

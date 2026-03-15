@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.View
 import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -21,6 +22,7 @@ import com.example.linkchecker.service.LinkCheckAccessibilityService
 import com.example.linkchecker.util.LinkAdapter
 import com.example.linkchecker.util.LinkExtractor
 import com.example.linkchecker.util.PlatformHandler
+import java.util.ArrayList
 
 class MainActivity : AppCompatActivity() {
 
@@ -31,7 +33,7 @@ class MainActivity : AppCompatActivity() {
     private var isChecking = false
     private val handler = Handler(Looper.getMainLooper())
     
-    private val checkTimeout = 20000L // 20秒超时，给自动点击留时间
+    private val checkTimeout = 30000L // 30秒超时，给自动点击和页面加载留足时间
     private var checkRunnable: Runnable? = null
 
     private val resultReceiver = object : BroadcastReceiver() {
@@ -43,8 +45,7 @@ class MainActivity : AppCompatActivity() {
                 if (isInvalid) {
                     updateCurrentLinkInvalid()
                 } else if (found && currentCheckIndex < linkList.size) {
-                    val title = intent.getStringExtra("title")
-                    val author = intent.getStringExtra("author")
+                    // 抓取到的数据，如果为空则保留原有的元数据
                     val fans = intent.getStringExtra("fans")
                     val likes = intent.getStringExtra("likes")
                     val likesNumber = intent.getIntExtra("likesNumber", -1)
@@ -52,7 +53,7 @@ class MainActivity : AppCompatActivity() {
                     val shares = intent.getStringExtra("shares")
                     val isAboveThreshold = intent.getBooleanExtra("isAboveThreshold", false)
                     
-                    updateCurrentLinkResult(title, author, fans, likes, likesNumber, comments, shares, isAboveThreshold)
+                    updateCurrentLinkResult(fans, likes, likesNumber, comments, shares, isAboveThreshold)
                 }
 
                 // 自动检查下一个
@@ -68,12 +69,17 @@ class MainActivity : AppCompatActivity() {
 
         setupRecyclerView()
         setupButtons()
-        registerReceiver()
+        registerReceiver(resultReceiver, IntentFilter("com.example.linkchecker.LIKE_RESULT"))
     }
 
     override fun onResume() {
         super.onResume()
         updateAccessibilityButton()
+        // 如果正在检测中回到前台，确保进度 UI 显示
+        if (isChecking) {
+            binding.layoutProgress.visibility = View.VISIBLE
+            updateProgressUI()
+        }
     }
 
     override fun onDestroy() {
@@ -108,11 +114,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun registerReceiver() {
-        val filter = IntentFilter("com.example.linkchecker.LIKE_RESULT")
-        registerReceiver(resultReceiver, filter)
-    }
-
     private fun extractLinks() {
         val text = binding.editTextInput.text.toString()
         if (text.isEmpty()) {
@@ -142,10 +143,20 @@ class MainActivity : AppCompatActivity() {
         isChecking = true
         currentCheckIndex = 0
         
+        binding.buttonCheck.isEnabled = false
+        binding.buttonExtract.isEnabled = false
+        binding.layoutProgress.visibility = View.VISIBLE
+        binding.progressBar.max = linkList.size
+        
         linkList = linkList.map { it.copy(status = CheckStatus.PENDING) }.toMutableList()
         linkAdapter.notifyDataSetChanged()
 
         checkNextLink()
+    }
+
+    private fun updateProgressUI() {
+        binding.progressBar.progress = currentCheckIndex
+        binding.textViewProgress.text = "正在检测: ${currentCheckIndex + 1}/${linkList.size}"
     }
 
     private fun checkNextLink() {
@@ -156,10 +167,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        updateProgressUI()
         val linkItem = linkList[currentCheckIndex]
         linkList[currentCheckIndex] = linkItem.copy(status = CheckStatus.CHECKING)
         linkAdapter.notifyItemChanged(currentCheckIndex)
-        binding.textViewStatus.text = "正在检测: ${LinkExtractor.getPlatformName(linkItem.platform)} ${currentCheckIndex + 1}/${linkList.size}"
+        binding.textViewStatus.text = "正在检测: ${LinkExtractor.getPlatformName(linkItem.platform)}"
 
         LinkCheckAccessibilityService.reset()
         LinkCheckAccessibilityService.instance?.startWaiting(linkItem.platform)
@@ -171,28 +183,33 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 超时保护逻辑
         checkRunnable = Runnable {
             if (currentCheckIndex < linkList.size && linkList[currentCheckIndex].status == CheckStatus.CHECKING) {
                 updateCurrentLinkTimeout()
-                checkNextLink()
+                
+                // 尝试强行拉回主界面
+                val intent = Intent(this, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(intent)
+                
+                handler.postDelayed({ checkNextLink() }, 1500)
             }
         }
         handler.postDelayed(checkRunnable!!, checkTimeout)
     }
 
-    private fun updateCurrentLinkResult(title: String?, author: String?, fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?, isAboveThreshold: Boolean) {
+    private fun updateCurrentLinkResult(fans: String?, likes: String?, likesNumber: Int, comments: String?, shares: String?, isAboveThreshold: Boolean) {
         if (currentCheckIndex >= linkList.size) return
         
         val linkItem = linkList[currentCheckIndex]
         linkList[currentCheckIndex] = linkItem.copy(
             status = CheckStatus.SUCCESS,
-            title = title,
-            author = author,
-            fans = fans,
-            likes = likes,
-            likesNumber = likesNumber,
-            comments = comments,
-            shares = shares,
+            fans = fans ?: linkItem.fans,
+            likes = likes ?: linkItem.likes,
+            likesNumber = if (likesNumber != -1) likesNumber else linkItem.likesNumber,
+            comments = comments ?: linkItem.comments,
+            shares = shares ?: linkItem.shares,
             isAboveThreshold = isAboveThreshold
         )
         linkAdapter.notifyItemChanged(currentCheckIndex)
@@ -225,11 +242,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun finishChecking() {
         isChecking = false
+        binding.buttonCheck.isEnabled = true
+        binding.buttonExtract.isEnabled = true
+        binding.layoutProgress.visibility = View.GONE
         binding.textViewStatus.text = "检测完成"
         
-        val aboveThresholdCount = linkList.count { it.isAboveThreshold }
-        Toast.makeText(this, "检测完成! 共有 ${aboveThresholdCount} 个链接点赞≥50", Toast.LENGTH_LONG).show()
-
         val intent = Intent(this, ResultActivity::class.java).apply {
             putParcelableArrayListExtra("links", ArrayList(linkList))
         }
