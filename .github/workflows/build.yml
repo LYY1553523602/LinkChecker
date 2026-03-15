@@ -21,27 +21,19 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
         
-    - name: Check gradle wrapper
+    - name: Generate Gradle wrapper
       run: |
-        ls -la gradlew
-        ls -la gradle/wrapper/
-        cat gradle/wrapper/gradle-wrapper.properties
+        rm -f gradlew gradlew.bat
+        gradle wrapper --gradle-version 8.2
+        cat gradlew | head -20
         
-    - name: Build with Gradle
+    - name: Build APK
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --info --stacktrace 2>&1 | head -200
-      continue-on-error: true
-        
-    - name: Check build result
-      run: |
-        echo "Checking for APK..."
-        find . -name "*.apk" -type f 2>/dev/null
-        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug APK found"
+        ./gradlew assembleDebug --no-daemon
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
-      if: success()
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
