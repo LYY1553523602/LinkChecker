@@ -20,28 +20,20 @@ jobs:
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
       
-    - name: Make gradlew executable
-      run: chmod +x gradlew
-      
-    - name: Build Debug APK
+    - name: Fix Gradle Wrapper permissions and download
       run: |
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
-        echo "Build exit code: ${PIPESTATUS[0]}"
-      
-    - name: Check build output
-      if: always()
-      run: |
-        cat build.log || true
-        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "APK directory not found"
-        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+        chmod +x gradlew
+        # Replace Chinese mirror with official Gradle
+        sed -i 's|https://mirrors.cloud.tencent.com/gradle/|https://services.gradle.org/distributions/|' gradle/wrapper/gradle-wrapper.properties
+        cat gradle/wrapper/gradle-wrapper.properties
+        
+    - name: Build with Gradle Wrapper
+      run: ./gradlew assembleDebug --stacktrace --no-daemon
       
     - name: Upload APK
-      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
