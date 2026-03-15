@@ -17,5 +17,7 @@
     <string name="platform_xiaohongshu">小红书</string>
     <string name="platform_toutiao">今日头条</string>
     <string name="platform_wechat">微信</string>
+    <string name="platform_weibo">微博</string>
+    <string name="platform_kuaishou">快手</string>
     <string name="platform_unknown">未知</string>
 </resources>

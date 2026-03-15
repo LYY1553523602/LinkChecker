@@ -13,64 +13,37 @@ object PlatformHandler {
     private const val PACKAGE_XIAOHONGSHU = "com.xingin.xhs"
     private const val PACKAGE_TOUTIAO = "com.ss.android.article.news"
     private const val PACKAGE_WECHAT = "com.tencent.mm"
+    private const val PACKAGE_WEIBO = "com.sina.weibo"
+    private const val PACKAGE_KUAISHOU = "com.smile.gifmaker"
 
     fun openLink(context: Context, linkItem: LinkItem): Boolean {
         return when (linkItem.platform) {
-            Platform.DOUYIN -> openDouyin(context, linkItem.url)
-            Platform.XIAOHONGSHU -> openXiaohongshu(context, linkItem.url)
-            Platform.TOUTIAO -> openToutiao(context, linkItem.url)
-            Platform.WECHAT -> openWechatArticle(context, linkItem.url)
+            Platform.DOUYIN -> openNativeApp(context, linkItem.url, PACKAGE_DOUYIN)
+            Platform.XIAOHONGSHU -> openNativeApp(context, linkItem.url, PACKAGE_XIAOHONGSHU)
+            Platform.TOUTIAO -> openNativeApp(context, linkItem.url, PACKAGE_TOUTIAO)
+            Platform.WECHAT -> openNativeApp(context, linkItem.url, PACKAGE_WECHAT)
+            Platform.WEIBO -> openNativeApp(context, linkItem.url, PACKAGE_WEIBO)
+            Platform.KUAISHOU -> openNativeApp(context, linkItem.url, PACKAGE_KUAISHOU)
             Platform.UNKNOWN -> openWithBrowser(context, linkItem.url)
         }
     }
 
-    private fun openDouyin(context: Context, url: String): Boolean {
+    /**
+     * 尝试使用指定的包名打开原生应用
+     */
+    private fun openNativeApp(context: Context, url: String, packageName: String): Boolean {
         return try {
-            // 尝试用抖音APP打开
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 data = Uri.parse(url)
-                setPackage(PACKAGE_DOUYIN)
+                setPackage(packageName)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
             true
         } catch (e: Exception) {
-            // 如果抖音APP未安装，用浏览器打开
+            // 如果指定包名的应用未安装，则尝试通用方式（系统会弹出选择框或用默认浏览器）
             openWithBrowser(context, url)
         }
-    }
-
-    private fun openXiaohongshu(context: Context, url: String): Boolean {
-        return try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = Uri.parse(url)
-                setPackage(PACKAGE_XIAOHONGSHU)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            openWithBrowser(context, url)
-        }
-    }
-
-    private fun openToutiao(context: Context, url: String): Boolean {
-        return try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = Uri.parse(url)
-                setPackage(PACKAGE_TOUTIAO)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            openWithBrowser(context, url)
-        }
-    }
-
-    private fun openWechatArticle(context: Context, url: String): Boolean {
-        // 微信文章用内置浏览器打开
-        return openWithBrowser(context, url)
     }
 
     private fun openWithBrowser(context: Context, url: String): Boolean {
@@ -92,6 +65,8 @@ object PlatformHandler {
             Platform.XIAOHONGSHU -> PACKAGE_XIAOHONGSHU
             Platform.TOUTIAO -> PACKAGE_TOUTIAO
             Platform.WECHAT -> PACKAGE_WECHAT
+            Platform.WEIBO -> PACKAGE_WEIBO
+            Platform.KUAISHOU -> PACKAGE_KUAISHOU
             Platform.UNKNOWN -> null
         }
     }

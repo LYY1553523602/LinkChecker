@@ -18,6 +18,8 @@ enum class Platform {
     XIAOHONGSHU,   // 小红书
     TOUTIAO,       // 今日头条
     WECHAT,        // 微信文章
+    WEIBO,         // 微博
+    KUAISHOU,      // 快手
     UNKNOWN        // 未知
 }
 

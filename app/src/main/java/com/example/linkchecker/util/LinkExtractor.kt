@@ -33,6 +33,20 @@ object LinkExtractor {
         Pattern.compile("https?://mp\\.weixin\\.qq\\.com/s\\?[^\\s]+", Pattern.CASE_INSENSITIVE)
     )
 
+    // 微博链接正则
+    private val WEIBO_PATTERNS = listOf(
+        Pattern.compile("https?://weibo\\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://m\\.weibo\\.cn/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://weibo\\.cn/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE)
+    )
+
+    // 快手链接正则
+    private val KUAISHOU_PATTERNS = listOf(
+        Pattern.compile("https?://v\\.kuaishou\\.com/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://www\\.kuaishou\\.com/short-video/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("https?://live\\.kuaishou\\.com/u/[a-zA-Z0-9]+", Pattern.CASE_INSENSITIVE)
+    )
+
     // 通用URL正则
     private val URL_PATTERN = Pattern.compile(
         "https?://[a-zA-Z0-9][-a-zA-Z0-9]*\\.[-a-zA-Z0-9]+(?:/[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])?",
@@ -85,6 +99,20 @@ object LinkExtractor {
             }
         }
 
+        // 检查微博
+        for (pattern in WEIBO_PATTERNS) {
+            if (pattern.matcher(url).find()) {
+                return Platform.WEIBO
+            }
+        }
+
+        // 检查快手
+        for (pattern in KUAISHOU_PATTERNS) {
+            if (pattern.matcher(url).find()) {
+                return Platform.KUAISHOU
+            }
+        }
+
         // 检查域名关键字
         return when {
             url.contains("douyin", ignoreCase = true) -> Platform.DOUYIN
@@ -92,6 +120,8 @@ object LinkExtractor {
             url.contains("xhslink", ignoreCase = true) -> Platform.XIAOHONGSHU
             url.contains("toutiao", ignoreCase = true) -> Platform.TOUTIAO
             url.contains("weixin.qq", ignoreCase = true) -> Platform.WECHAT
+            url.contains("weibo", ignoreCase = true) -> Platform.WEIBO
+            url.contains("kuaishou", ignoreCase = true) -> Platform.KUAISHOU
             else -> Platform.UNKNOWN
         }
     }
@@ -102,6 +132,8 @@ object LinkExtractor {
             Platform.XIAOHONGSHU -> "小红书"
             Platform.TOUTIAO -> "今日头条"
             Platform.WECHAT -> "微信"
+            Platform.WEIBO -> "微博"
+            Platform.KUAISHOU -> "快手"
             Platform.UNKNOWN -> "未知"
         }
     }
