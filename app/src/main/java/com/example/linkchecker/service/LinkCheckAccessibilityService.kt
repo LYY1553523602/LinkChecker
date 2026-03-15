@@ -243,4 +243,8 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         isWaitingForResult = true
         lastResult = null
     }
+
+    override fun onInterrupt() {
+        instance = null
+    }
 }

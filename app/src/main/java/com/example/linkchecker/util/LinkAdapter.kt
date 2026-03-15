@@ -65,6 +65,11 @@ class LinkAdapter(private val links: List<LinkItem>) :
                 holder.textStatus.setTextColor(ContextCompat.getColor(context, R.color.red))
                 holder.textLikes.visibility = View.GONE
             }
+            CheckStatus.INVALID -> {
+                holder.textStatus.text = "链接失效"
+                holder.textStatus.setTextColor(ContextCompat.getColor(context, R.color.red))
+                holder.textLikes.visibility = View.GONE
+            }
         }
     }
 
