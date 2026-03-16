@@ -151,102 +151,111 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         sendResultBroadcast()
     }
 
-  // ==================== V2.4 修复编译错误 + 完善5级引擎 ====================
+// ==================== V2.6 最终简化 + 编译安全版 ====================
 import kotlin.math.minOf
-import java.util.regex.Pattern
+import java.io.File
 
-private fun findInteraction(rootNode: AccessibilityNodeInfo, keywords: List<String>, platform: String): String? {
-    for (i in 0 until 5) {
-        when (i) {
-            0 -> { // 第1级：resource-id 模糊匹配
-                val ids = listOf("like", "digg", "zan", "comment", "share", "count")
-                val allNodes = rootNode.findAccessibilityNodeInfosByText("")
-                allNodes.forEach { node ->
-                    val id = node.viewIdResourceName ?: ""
-                    if (ids.any { id.contains(it, ignoreCase = true) }) return node.text?.toString()
-                }
-            }
-            1 -> { // 第2级：content-desc 包含关键词
-                val allNodes = rootNode.findAccessibilityNodeInfosByText("")
-                allNodes.forEach { node ->
-                    val desc = node.contentDescription?.toString() ?: ""
-                    if (keywords.any { desc.contains(it) }) return node.text?.toString()
-                }
-            }
-            2 -> { // 第3级：数字正则（万/k/亿）
-                traverseForRegex(rootNode) { text ->
-                    if (Pattern.matches("\\d+(\\.\\d+)?[万k亿]?", text)) return text
-                }
-            }
-            3 -> { // 第4级：底部LinearLayout的第1/2/3个子节点
-                findBottomLinear(rootNode)?.let { container ->
-                    for (j in 0 until minOf(3, container.childCount)) {
-                        val childText = container.getChild(j)?.text?.toString() ?: ""
-                        if (childText.isNotEmpty()) return childText
-                    }
-                }
-            }
-            4 -> { // 第5级：兄弟节点遍历
-                traverseSiblings(rootNode) { siblingText ->
-                    if (siblingText.isNotEmpty()) return siblingText
-                }
-            }
+private fun findInteraction(rootNode: AccessibilityNodeInfo?, keywords: List<String>, platform: String): String? {
+    if (rootNode == null) return null
+    val allNodes = rootNode.findAccessibilityNodeInfosByText("") ?: return null
+
+    // 1. resource-id 匹配
+    val ids = listOf("like", "digg", "zan", "comment", "share", "count")
+    for (node in allNodes) {
+        val id = node.viewIdResourceName ?: continue
+        if (ids.any { id.contains(it, ignoreCase = true) }) return node.text?.toString()
+    }
+
+    // 2. content-desc 匹配
+    for (node in allNodes) {
+        val desc = node.contentDescription?.toString() ?: continue
+        if (keywords.any { desc.contains(it) }) return node.text?.toString()
+    }
+
+    // 3. 数字 regex 匹配
+    var result = ""
+    traverseNode(rootNode) { text ->
+        if (text.matches(Regex("\\d+(\\.\\d+)?[万k亿]?")) ) result = text
+    }
+    if (result.isNotEmpty()) return result
+
+    // 4. 底部 LinearLayout 子节点
+    val container = findBottomLinear(rootNode)
+    if (container != null) {
+        for (j in 0 until minOf(3, container.childCount)) {
+            val childText = container.getChild(j)?.text?.toString() ?: continue
+            if (childText.isNotEmpty()) return childText
         }
     }
+
+    // 5. 兄弟节点遍历
+    result = ""
+    traverseSiblings(rootNode) { text ->
+        if (text.matches(Regex("\\d+[万k亿]?")) ) result = text
+    }
+    if (result.isNotEmpty()) return result
+
     dumpAccessibilityTree(rootNode, platform)
     return null
 }
 
-private fun traverseForRegex(node: AccessibilityNodeInfo, callback: (String) -> Unit) {
+private fun traverseNode(node: AccessibilityNodeInfo?, callback: (String) -> Unit) {
+    if (node == null) return
     val text = node.text?.toString() ?: ""
     if (text.isNotEmpty()) callback(text)
-    for (i in 0 until node.childCount) node.getChild(i)?.let { traverseForRegex(it, callback) }
+    for (i in 0 until node.childCount) traverseNode(node.getChild(i), callback)
 }
 
-private fun findBottomLinear(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+private fun findBottomLinear(root: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+    if (root == null) return null
     val list = mutableListOf<AccessibilityNodeInfo>()
     collectLinearLayouts(root, list)
     return list.lastOrNull { it.childCount >= 2 }
 }
 
-private fun collectLinearLayouts(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
+private fun collectLinearLayouts(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
+    if (node == null) return
     if (node.className?.contains("LinearLayout") == true) list.add(node)
-    for (i in 0 until node.childCount) node.getChild(i)?.let { collectLinearLayouts(it, list) }
+    for (i in 0 until node.childCount) collectLinearLayouts(node.getChild(i), list)
 }
 
-private fun traverseSiblings(node: AccessibilityNodeInfo, callback: (String) -> Unit) {
+private fun traverseSiblings(node: AccessibilityNodeInfo?, callback: (String) -> Unit) {
+    if (node == null) return
     var p = node.parent
     while (p != null) {
         for (i in 0 until p.childCount) {
-            val childText = p.getChild(i)?.text?.toString() ?: ""
-            callback(childText)
+            val childText = p.getChild(i)?.text?.toString() ?: continue
+            if (childText.isNotEmpty()) callback(childText)
         }
         p = p.parent
     }
 }
 
-private fun dumpAccessibilityTree(root: AccessibilityNodeInfo, platform: String) {
-    try {
-        val dir = java.io.File("/sdcard/LinkChecker/debug")
-        dir.mkdirs()
-        val file = java.io.File(dir, "${platform}_${System.currentTimeMillis()}.txt")
-        val sb = StringBuilder()
-        dumpNode(root, sb, 0)
-        file.writeText(sb.toString())
-    } catch (e: Exception) {}
+private fun dumpAccessibilityTree(root: AccessibilityNodeInfo?, platform: String) {
+    if (root == null) return
+    val dir = File("/sdcard/LinkChecker/debug")
+    dir.mkdirs()
+    val file = File(dir, "${platform}_${System.currentTimeMillis()}.txt")
+    val sb = StringBuilder()
+    dumpNode(root, sb, 0)
+    file.writeText(sb.toString())
 }
 
 private fun dumpNode(node: AccessibilityNodeInfo, sb: StringBuilder, depth: Int) {
-    sb.append("  ".repeat(depth)).append("Node: class=").append(node.className)
-        .append(", text=").append(node.text)
-        .append(", desc=").append(node.contentDescription)
-        .append(", id=").append(node.viewIdResourceName)
-        .append(", bounds=").append(node.boundsInScreen).append("\n")
-    for (i in 0 until node.childCount) node.getChild(i)?.let { dumpNode(it, sb, depth + 1) }
+    sb.append("  ".repeat(depth))
+        .append("class=").append(node.className ?: "null")
+        .append(", text=").append(node.text ?: "null")
+        .append(", desc=").append(node.contentDescription ?: "null")
+        .append(", id=").append(node.viewIdResourceName ?: "null")
+        .append(", bounds=").append(node.boundsInScreen)
+        .append("\n")
+    for (i in 0 until node.childCount) {
+        node.getChild(i)?.let { dumpNode(it, sb, depth + 1) }
+    }
 }
 
-// 新统一解析函数
-private fun parseAnyPlatform(rootNode: AccessibilityNodeInfo, platform: Platform): FullResult? {
+private fun parseAnyPlatform(rootNode: AccessibilityNodeInfo?, platform: Platform): FullResult? {
+    if (rootNode == null) return null
     val kwLike = listOf("赞", "点赞", "like", "digg")
     val kwComment = listOf("评论", "comment")
     val kwShare = listOf("分享", "share", "转发")
@@ -262,10 +271,9 @@ private fun parseAnyPlatform(rootNode: AccessibilityNodeInfo, platform: Platform
     return null
 }
 
-// 替换旧函数
-private fun parseDouyin(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.DOUYIN)
-private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.XIAOHONGSHU)
-private fun parseToutiao(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.TOUTIAO)
-private fun parseWechat(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.WECHAT)
-private fun parseWeibo(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.WEIBO)
-private fun parseKuaishou(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.KUAISHOU)
+private fun parseDouyin(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.DOUYIN)
+private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.XIAOHONGSHU)
+private fun parseToutiao(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.TOUTIAO)
+private fun parseWechat(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.WECHAT)
+private fun parseWeibo(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.WEIBO)
+private fun parseKuaishou(rootNode: AccessibilityNodeInfo?) = parseAnyPlatform(rootNode, Platform.KUAISHOU)
