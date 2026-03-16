@@ -151,31 +151,34 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         sendResultBroadcast()
     }
 
-    // ==================== V2.3 真实5级回退引擎（小白专用版）====================
+  // ==================== V2.4 修复编译错误 + 完善5级引擎 ====================
+import kotlin.math.minOf
+import java.util.regex.Pattern
+
 private fun findInteraction(rootNode: AccessibilityNodeInfo, keywords: List<String>, platform: String): String? {
-    // 5级超级容错查找（2026年最新适配）
     for (i in 0 until 5) {
         when (i) {
             0 -> { // 第1级：resource-id 模糊匹配
                 val ids = listOf("like", "digg", "zan", "comment", "share", "count")
-                rootNode.findAccessibilityNodeInfosByText("")?.forEach { node ->
+                val allNodes = rootNode.findAccessibilityNodeInfosByText("")
+                allNodes.forEach { node ->
                     val id = node.viewIdResourceName ?: ""
-                    if (ids.any { id.contains(it) }) return node.text?.toString()
+                    if (ids.any { id.contains(it, ignoreCase = true) }) return node.text?.toString()
                 }
             }
             1 -> { // 第2级：content-desc 包含关键词
-                val nodes = rootNode.findAccessibilityNodeInfosByText("")
-                nodes.forEach { node ->
+                val allNodes = rootNode.findAccessibilityNodeInfosByText("")
+                allNodes.forEach { node ->
                     val desc = node.contentDescription?.toString() ?: ""
                     if (keywords.any { desc.contains(it) }) return node.text?.toString()
                 }
             }
             2 -> { // 第3级：数字正则（万/k/亿）
                 traverseForRegex(rootNode) { text ->
-                    if (Regex("\\d+(\\.\\d+)?[万k亿]?").containsMatchIn(text)) return text
+                    if (Pattern.matches("\\d+(\\.\\d+)?[万k亿]?", text)) return text
                 }
             }
-            3 -> { // 第4级：底部LinearLayout的第1/2/3个子节点（点赞-评论-分享常见结构）
+            3 -> { // 第4级：底部LinearLayout的第1/2/3个子节点
                 findBottomLinear(rootNode)?.let { container ->
                     for (j in 0 until minOf(3, container.childCount)) {
                         val childText = container.getChild(j)?.text?.toString() ?: ""
@@ -183,12 +186,13 @@ private fun findInteraction(rootNode: AccessibilityNodeInfo, keywords: List<Stri
                     }
                 }
             }
-            4 -> { // 第5级：兄弟节点遍历（最强保底）
-                traverseSiblings(rootNode) { return it }
+            4 -> { // 第5级：兄弟节点遍历
+                traverseSiblings(rootNode) { siblingText ->
+                    if (siblingText.isNotEmpty()) return siblingText
+                }
             }
         }
     }
-    // 失败自动dump调试文件（关键！）
     dumpAccessibilityTree(rootNode, platform)
     return null
 }
@@ -206,7 +210,7 @@ private fun findBottomLinear(root: AccessibilityNodeInfo): AccessibilityNodeInfo
 }
 
 private fun collectLinearLayouts(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
-    if (node.className?.toString()?.contains("LinearLayout") == true) list.add(node)
+    if (node.className?.contains("LinearLayout") == true) list.add(node)
     for (i in 0 until node.childCount) node.getChild(i)?.let { collectLinearLayouts(it, list) }
 }
 
@@ -215,19 +219,33 @@ private fun traverseSiblings(node: AccessibilityNodeInfo, callback: (String) -> 
     while (p != null) {
         for (i in 0 until p.childCount) {
             val childText = p.getChild(i)?.text?.toString() ?: ""
-            if (childText.isNotEmpty()) callback(childText)
+            callback(childText)
         }
         p = p.parent
     }
 }
 
 private fun dumpAccessibilityTree(root: AccessibilityNodeInfo, platform: String) {
-    val file = java.io.File("/sdcard/LinkChecker/debug/${platform}_${System.currentTimeMillis()}.txt")
-    file.parentFile?.mkdirs()
-    file.writeText(root.toString() + "\n\n=== 详细节点树 ===")
+    try {
+        val dir = java.io.File("/sdcard/LinkChecker/debug")
+        dir.mkdirs()
+        val file = java.io.File(dir, "${platform}_${System.currentTimeMillis()}.txt")
+        val sb = StringBuilder()
+        dumpNode(root, sb, 0)
+        file.writeText(sb.toString())
+    } catch (e: Exception) {}
 }
 
-// 新统一解析函数（取代所有旧parseXXX）
+private fun dumpNode(node: AccessibilityNodeInfo, sb: StringBuilder, depth: Int) {
+    sb.append("  ".repeat(depth)).append("Node: class=").append(node.className)
+        .append(", text=").append(node.text)
+        .append(", desc=").append(node.contentDescription)
+        .append(", id=").append(node.viewIdResourceName)
+        .append(", bounds=").append(node.boundsInScreen).append("\n")
+    for (i in 0 until node.childCount) node.getChild(i)?.let { dumpNode(it, sb, depth + 1) }
+}
+
+// 新统一解析函数
 private fun parseAnyPlatform(rootNode: AccessibilityNodeInfo, platform: Platform): FullResult? {
     val kwLike = listOf("赞", "点赞", "like", "digg")
     val kwComment = listOf("评论", "comment")
@@ -244,7 +262,7 @@ private fun parseAnyPlatform(rootNode: AccessibilityNodeInfo, platform: Platform
     return null
 }
 
-// 把下面所有旧的 parseDouyin / parseXiaohongshu 等函数全部替换成这一行调用：
+// 替换旧函数
 private fun parseDouyin(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.DOUYIN)
 private fun parseXiaohongshu(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.XIAOHONGSHU)
 private fun parseToutiao(rootNode: AccessibilityNodeInfo) = parseAnyPlatform(rootNode, Platform.TOUTIAO)
