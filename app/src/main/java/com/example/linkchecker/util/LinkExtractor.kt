@@ -11,6 +11,8 @@ object LinkExtractor {
         Pattern.CASE_INSENSITIVE
     )
 
+    fun extract(text: String): List<LinkItem> = extractLinks(text)
+
     fun extractLinks(text: String): List<LinkItem> {
         val links = mutableListOf<LinkItem>()
         val lines = text.split("\n")
