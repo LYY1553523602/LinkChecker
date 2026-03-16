@@ -16,7 +16,8 @@ data class LinkItem(
     val comments: String? = null,
     val shares: String? = null,
     val isAboveThreshold: Boolean = false,
-    val isInvalid: Boolean = false
+    val isInvalid: Boolean = false,
+    val isChecked: Boolean = false
 ) : Parcelable
 
 enum class Platform {
