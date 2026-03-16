@@ -1,5 +1,9 @@
 name: Build APK
 
+# 强制使用 Node.js 24 来解决兼容性问题（GitHub 2026 年要求）
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [ main, master ]
