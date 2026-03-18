@@ -207,14 +207,13 @@ class LinkCheckAccessibilityService : AccessibilityService() {
         // 检查是否至少有一个指纹特征被匹配
         val matchedFeatures = mutableSetOf<Int>()
         
-        traverseNode(rootNode) { node ->
-            val text = (node.text?.toString() ?: "").lowercase()
-            val desc = (node.contentDescription?.toString() ?: "").lowercase()
-            val id = (node.viewIdResourceName ?: "").lowercase()
+        traverseNode(rootNode) { nodeText ->
+            // 在这里我们只能访问 nodeText，需要重新设计这个方法
+            val text = nodeText.lowercase()
             
             fingerprints.forEachIndexed { index, keywords ->
                 if (keywords.any { keyword ->
-                    text.contains(keyword) || desc.contains(keyword) || id.contains(keyword)
+                    text.contains(keyword)
                 }) {
                     matchedFeatures.add(index)
                 }
@@ -415,8 +414,8 @@ class LinkCheckAccessibilityService : AccessibilityService() {
 
     private fun traverseNode(node: AccessibilityNodeInfo?, callback: (String) -> Unit) {
         if (node == null) return
-        val text = node.text?.toString() ?: ""
-        if (text.isNotEmpty()) callback(text)
+        val nodeText = node.text?.toString() ?: ""
+        if (nodeText.isNotEmpty()) callback(nodeText)
         for (i in 0 until node.childCount) traverseNode(node.getChild(i), callback)
     }
 
@@ -463,7 +462,6 @@ class LinkCheckAccessibilityService : AccessibilityService() {
             .append(", text=").append(node.text ?: "null")
             .append(", desc=").append(node.contentDescription ?: "null")
             .append(", id=").append(node.viewIdResourceName ?: "null")
-            .append(", bounds=").append(node.boundsInScreen)
             .append("\n")
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { dumpNode(it, sb, depth + 1) }

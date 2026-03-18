@@ -218,11 +218,11 @@ class MainActivity : AppCompatActivity() {
     private fun forceReturnToLinkChecker() {
         try {
             // 方法1：使用全局返回操作
-            LinkCheckAccessibilityService.instance?.performGlobalAction(GLOBAL_ACTION_BACK)
+            LinkCheckAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
             Thread.sleep(300)
             
             // 方法2：再次返回以确保离开目标应用
-            LinkCheckAccessibilityService.instance?.performGlobalAction(GLOBAL_ACTION_BACK)
+            LinkCheckAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
             Thread.sleep(300)
             
             // 方法3：启动 LinkChecker 应用
